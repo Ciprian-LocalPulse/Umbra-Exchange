@@ -41,7 +41,7 @@ The gap isn't the cryptography — Merkle-inclusion SNARKs and PSI are well-unde
 
 ## Relationship to Veritas Mesh
 
-The proof engine here is built on the same foundations as [Veritas Mesh](#) (Groth16 over BN254, arkworks) rather than starting from scratch.
+The proof engine here is built on the same foundations as [Veritas Mesh](https://github.com/Ciprian-LocalPulse/veritas-mesh) (Groth16 over BN254, arkworks) rather than starting from scratch.
 
 Umbra Exchange is the threat-intel-specific application layer; Veritas Mesh remains the general-purpose compliance/commitment proof engine.
 
