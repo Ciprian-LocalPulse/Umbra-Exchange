@@ -1,0 +1,6 @@
+/target
+Cargo.lock
+*.pk
+*.vk
+*.proof
+.DS_Store
