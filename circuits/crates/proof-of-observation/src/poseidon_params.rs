@@ -68,7 +68,10 @@ mod tests {
         let node_cfg = merkle_node_config();
         assert_eq!(node_cfg.rate, 2);
         assert_eq!(node_cfg.capacity, 1);
-        assert_eq!(node_cfg.ark.len(), node_cfg.full_rounds + node_cfg.partial_rounds);
+        assert_eq!(
+            node_cfg.ark.len(),
+            node_cfg.full_rounds + node_cfg.partial_rounds
+        );
         assert!(node_cfg.ark.iter().all(|row| row.len() == 3));
         assert_eq!(node_cfg.mds.len(), 3);
 
