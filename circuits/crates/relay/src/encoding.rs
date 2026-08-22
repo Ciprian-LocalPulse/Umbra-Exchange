@@ -32,8 +32,10 @@ pub fn fr_to_hex(value: &Fr) -> String {
 }
 
 pub fn fr_from_hex(s: &str) -> Result<Fr, EncodingError> {
-    let bytes = hex::decode(s.trim()).map_err(|_| EncodingError("field element is not valid hex"))?;
-    Fr::deserialize_compressed(&bytes[..]).map_err(|_| EncodingError("bytes are not a valid BN254 field element"))
+    let bytes =
+        hex::decode(s.trim()).map_err(|_| EncodingError("field element is not valid hex"))?;
+    Fr::deserialize_compressed(&bytes[..])
+        .map_err(|_| EncodingError("bytes are not a valid BN254 field element"))
 }
 
 pub fn proof_to_hex(proof: &Proof<Bn254>) -> String {
@@ -46,7 +48,8 @@ pub fn proof_to_hex(proof: &Proof<Bn254>) -> String {
 
 pub fn proof_from_hex(s: &str) -> Result<Proof<Bn254>, EncodingError> {
     let bytes = hex::decode(s.trim()).map_err(|_| EncodingError("proof is not valid hex"))?;
-    Proof::deserialize_compressed(&bytes[..]).map_err(|_| EncodingError("bytes are not a valid Groth16 proof"))
+    Proof::deserialize_compressed(&bytes[..])
+        .map_err(|_| EncodingError("bytes are not a valid Groth16 proof"))
 }
 
 pub fn vk_to_bytes(vk: &VerifyingKey<Bn254>) -> Vec<u8> {
@@ -57,5 +60,6 @@ pub fn vk_to_bytes(vk: &VerifyingKey<Bn254>) -> Vec<u8> {
 }
 
 pub fn vk_from_bytes(bytes: &[u8]) -> Result<VerifyingKey<Bn254>, EncodingError> {
-    VerifyingKey::deserialize_compressed(bytes).map_err(|_| EncodingError("bytes are not a valid Groth16 verifying key"))
+    VerifyingKey::deserialize_compressed(bytes)
+        .map_err(|_| EncodingError("bytes are not a valid Groth16 verifying key"))
 }

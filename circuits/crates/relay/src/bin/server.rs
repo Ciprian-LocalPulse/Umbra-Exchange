@@ -12,8 +12,8 @@
 use ark_bn254::Bn254;
 use ark_groth16::VerifyingKey;
 use ark_serialize::CanonicalDeserialize;
-use reputation_accumulator::TierWeights;
 use relay::state::AppState;
+use reputation_accumulator::TierWeights;
 use std::fs;
 use std::sync::Arc;
 

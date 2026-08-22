@@ -4,7 +4,7 @@
 //! rather than a mocked one. Only compiled when the `test-support` feature
 //! is enabled; never enable it in a production build.
 
-use crate::{PublicInputs, ProofOfObservationCircuit, Witness};
+use crate::{ProofOfObservationCircuit, PublicInputs, Witness};
 use ark_bn254::Fr;
 use ark_crypto_primitives::crh::poseidon::{TwoToOneCRH, CRH};
 use ark_crypto_primitives::crh::{CRHScheme, TwoToOneCRHScheme};
