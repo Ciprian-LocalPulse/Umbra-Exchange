@@ -7,7 +7,11 @@
 //! key. That's acceptable for local development and testing. It is NOT a
 //! substitute for a real multi-party ceremony before this relay is used
 //! with real, sensitive threat-intel data — see docs/THREAT_MODEL.md,
-//! "Trusted setup".
+//! "Trusted setup". This RNG is deliberately OS-entropy-seeded
+//! (`OsRng`), not a fixed seed: a fixed/deterministic seed here would mean
+//! the toxic waste is reconstructible by anyone who reads this source
+//! file, not just whoever ran the binary — do not "fix" this to be
+//! reproducible.
 //!
 //! Usage: `umbra-relay-keygen [output-dir]` (defaults to the current
 //! directory). Writes `umbra.pk` (proving key, for `umbra-relay-prove`)
@@ -18,7 +22,7 @@ use ark_groth16::Groth16;
 use ark_serialize::CanonicalSerialize;
 use ark_snark::SNARK;
 use proof_of_observation::test_support::sample_observation;
-use rand::{rngs::StdRng, SeedableRng};
+use rand::rngs::OsRng;
 use std::fs;
 
 fn main() {
@@ -44,7 +48,7 @@ fn main() {
         Fr::from(0u64),
     );
 
-    let mut rng = StdRng::seed_from_u64(20260822);
+    let mut rng = OsRng;
     let (pk, vk) = Groth16::<Bn254>::circuit_specific_setup(sample.circuit, &mut rng)
         .expect("local Groth16 setup should succeed for a well-formed circuit");
 

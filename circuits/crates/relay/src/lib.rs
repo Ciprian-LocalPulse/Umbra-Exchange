@@ -10,8 +10,10 @@
 //! are only checked against whatever verifying key the relay was started
 //! with (see `umbra-relay-keygen`'s warning banner — it's a local,
 //! non-ceremony setup), and `min_tier` is currently an unconstrained public
-//! input in the circuit itself (see proof-of-observation's lib.rs docs), so
-//! this relay is trusting the claimed tier, not proving it. Treat this
+//! input in the circuit itself (see proof-of-observation's lib.rs docs).
+//! Because of that, this relay does NOT use the claimed `min_tier` for
+//! scoring weight — every accepted observation is scored as tier 0 (see
+//! `submit_observation`) until an in-circuit tier gadget lands. Treat this
 //! deployment as a research prototype — see docs/THREAT_MODEL.md.
 
 pub mod encoding;
@@ -118,11 +120,22 @@ async fn submit_observation(
     let indicator_key = fr_to_hex(&indicator_hash);
     let nullifier_key = fr_to_hex(&nullifier);
 
+    // SECURITY: `req.min_tier` is the caller's *claim*, not a
+    // cryptographically-verified fact — the circuit does not constrain
+    // `min_tier` yet (see proof-of-observation's lib.rs and
+    // docs/THREAT_MODEL.md's "credential-tier enforcement" caveat), so a
+    // valid proof can carry *any* min_tier value with zero connection to a
+    // real credential. Weighting on the claimed value would let a single
+    // attacker claim tier 3 (8x weight) for free. Every observation is
+    // therefore scored as tier 0 here, regardless of what was claimed,
+    // until an in-circuit tier gadget lands. `min_tier` is still checked
+    // as a public input above (so a tampered proof still fails to
+    // verify), it's just not trusted for *weighting* purposes.
     let observation = VerifiedObservation {
         indicator_hash: indicator_key.clone(),
         epoch: req.epoch,
         nullifier: nullifier_key,
-        tier: req.min_tier,
+        tier: 0,
     };
 
     let mut inner = state.inner.lock().expect("relay state mutex poisoned");
