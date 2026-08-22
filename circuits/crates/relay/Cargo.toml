@@ -1,0 +1,38 @@
+[package]
+name = "relay"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Reference relay for Umbra Exchange: verifies proof-of-observation Groth16 proofs, rejects nullifier replays, and aggregates per-(indicator, epoch) confidence scores. Phase 0 reference implementation — see docs/ARCHITECTURE.md. Not hardened for production: in-memory only, single instance, test-only Groth16 keys."
+
+[dependencies]
+proof-of-observation = { path = "../proof-of-observation" }
+reputation-accumulator = { path = "../reputation-accumulator" }
+ark-bn254 = { workspace = true }
+ark-groth16 = { workspace = true }
+ark-snark = { workspace = true }
+ark-serialize = { workspace = true }
+ark-ff = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+hex = { workspace = true }
+
+[dev-dependencies]
+proof-of-observation = { path = "../proof-of-observation", features = ["test-support"] }
+tower = { workspace = true, features = ["util"] }
+rand = { workspace = true }
+
+[[bin]]
+name = "umbra-relay"
+path = "src/bin/server.rs"
+
+[[bin]]
+name = "umbra-relay-keygen"
+path = "src/bin/keygen.rs"
+
+[[bin]]
+name = "umbra-relay-prove"
+path = "src/bin/prove.rs"

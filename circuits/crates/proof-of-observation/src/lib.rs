@@ -26,8 +26,18 @@
 
 pub mod poseidon_params;
 
+/// Test-support helpers, exposed behind the `test-support` feature so other
+/// crates in this workspace (currently `relay`) can build real, valid
+/// witnesses/proofs in their own integration tests without duplicating the
+/// Merkle-tree-building logic that already lives in this crate's own
+/// `#[cfg(test)]` module. Never enable this feature in a non-dev build.
+#[cfg(feature = "test-support")]
+pub mod test_support;
+
 use ark_bn254::Fr;
-use ark_crypto_primitives::crh::poseidon::constraints::{CRHGadget, CRHParametersVar, TwoToOneCRHGadget};
+use ark_crypto_primitives::crh::poseidon::constraints::{
+    CRHGadget, CRHParametersVar, TwoToOneCRHGadget,
+};
 use ark_crypto_primitives::crh::{CRHSchemeGadget, TwoToOneCRHSchemeGadget};
 use ark_r1cs_std::alloc::AllocVar;
 use ark_r1cs_std::eq::EqGadget;
@@ -134,10 +144,8 @@ impl ConstraintSynthesizer<Fr> for ProofOfObservationCircuit {
         current.enforce_equal(&root)?;
 
         // --- nullifier = Poseidon(credential_secret, indicator_hash, epoch) --
-        let computed_nullifier = CRHGadget::<Fr>::evaluate(
-            &leaf_params,
-            &[credential_secret, indicator_hash, epoch],
-        )?;
+        let computed_nullifier =
+            CRHGadget::<Fr>::evaluate(&leaf_params, &[credential_secret, indicator_hash, epoch])?;
         computed_nullifier.enforce_equal(&nullifier)?;
 
         // TODO (blocked on docs/PROTOCOL_SPEC.md §2, credential issuance
@@ -153,8 +161,8 @@ impl ConstraintSynthesizer<Fr> for ProofOfObservationCircuit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_crypto_primitives::crh::{CRHScheme, TwoToOneCRHScheme};
     use ark_crypto_primitives::crh::poseidon::{TwoToOneCRH, CRH};
+    use ark_crypto_primitives::crh::{CRHScheme, TwoToOneCRHScheme};
     use ark_groth16::Groth16;
     use ark_relations::r1cs::{ConstraintSystem, OptimizationGoal};
     use ark_snark::SNARK;
@@ -319,7 +327,9 @@ mod tests {
         bad_inputs[2] += Fr::from(1u64); // corrupt the claimed root
         let invalid = Groth16::<ark_bn254::Bn254>::verify(&vk, &bad_inputs, &proof)
             .expect("verification should not error even when it returns false");
-        assert!(!invalid, "a proof must not verify against a tampered public input");
+        assert!(
+            !invalid,
+            "a proof must not verify against a tampered public input"
+        );
     }
-
 }

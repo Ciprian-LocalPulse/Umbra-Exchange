@@ -6,6 +6,9 @@ license.workspace = true
 repository.workspace = true
 description = "Groth16 circuit: prove Merkle-inclusion of an indicator in an epoch commitment, gated by an anonymous tier credential, with nullifier-based replay protection."
 
+[features]
+test-support = []
+
 [dependencies]
 ark-ff = { workspace = true }
 ark-ec = { workspace = true }
