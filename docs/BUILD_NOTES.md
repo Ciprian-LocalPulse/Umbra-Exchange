@@ -24,10 +24,14 @@ If you're building on a newer Rust toolchain and want the latest versions of the
 cd circuits
 cargo test -p reputation-accumulator
 
-# proof-of-observation: compiles (input allocation only — constraints are
-# still TODO, see src/lib.rs)
-cargo build -p proof-of-observation
+# proof-of-observation: Merkle-inclusion + nullifier constraints
+# implemented and tested, including a real Groth16 round trip
+cargo test -p proof-of-observation
 
 # whole workspace
 cargo test --workspace
 ```
+
+## Poseidon parameter source
+
+`proof-of-observation` needs Poseidon round constants and an MDS matrix for the BN254 scalar field. Rather than generate these ourselves, `poseidon_params.rs` pulls them from the [`light-poseidon`](https://crates.io/crates/light-poseidon) crate (maintained by Light Protocol), which ships the standard circomlib/iden3 "bn254_x5" constants — generated via the official reference script from the Poseidon paper. `light-poseidon` stores round constants as a flat vector; we reshape that into the `ark[round][state_index]` layout `ark-crypto-primitives`'s sponge/CRH gadgets expect. See the doc comment at the top of that file for the exact reasoning and caveats.

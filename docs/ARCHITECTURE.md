@@ -51,9 +51,9 @@ Any SOC/SIEM/EDR that can ingest STIX 2.1 or a MISP feed. Consumes the relay's o
 | Component | Status |
 |---|---|
 | Reputation aggregation (`reputation-accumulator`) | **implemented and tested** — tier-weighted scoring, replay rejection via nullifier set, `cargo test -p reputation-accumulator` passes (7/7) |
-| Merkle-inclusion circuit (`proof-of-observation`) | public/witness input allocation **compiles and is verified against real arkworks 0.4 crates**; leaf hashing, Merkle path folding, credential gadget, and nullifier constraint are still TODO in `src/lib.rs` — allocating inputs is not the same as constraining them, see the comment in that file |
-| Credential/tiering scheme | designed, not implemented |
-| Relay service | not started — `reputation-accumulator`'s interface is ready to be consumed by one |
+| Merkle-inclusion + nullifier circuit (`proof-of-observation`) | **implemented and tested** — real Poseidon leaf hashing, Merkle path folding, nullifier constraint, all enforced (not just allocated). 6/6 tests pass, including a full local Groth16 setup → prove → verify round trip and three adversarial (tampered-input) cases. Poseidon parameters are the standard circomlib/iden3 BN254 constants (see `docs/BUILD_NOTES.md` for provenance) |
+| Credential-tier enforcement | **not implemented** — `min_tier` is allocated as a public input but nothing yet constrains it against `credential_secret`. This is called out loudly in the circuit's own doc comment on purpose: a proof from this circuit today attests to Merkle membership and a correctly-derived nullifier, *not* to holding a valid tier credential. Blocked on the issuance-governance decision in `docs/PROTOCOL_SPEC.md` §2, not on cryptography |
+| Relay service | not started — both crates above expose interfaces a relay can consume directly |
 | STIX/MISP schema mapping | draft in `schema/` |
 
-Everything marked "compiles"/"tested" above was actually run in a sandboxed build, not asserted from memory — see `docs/BUILD_NOTES.md` for the toolchain quirks that mattered.
+Everything marked "implemented"/"tested" above was actually run in a sandboxed build, not asserted from memory — see `docs/BUILD_NOTES.md`.

@@ -51,7 +51,7 @@ umbra-exchange/
 
 ## Status honestly
 
-This is Phase 0. `reputation-accumulator` is implemented and tested (`cargo test -p reputation-accumulator`, 7/7 passing). `proof-of-observation`'s circuit skeleton compiles against real arkworks 0.4 crates, but the actual constraints (Merkle path, Poseidon leaf hashing, credential gadget, nullifier) are still TODO — see `docs/ARCHITECTURE.md` for the exact breakdown and `docs/BUILD_NOTES.md` for toolchain notes. Nothing here has been audited. Treat it as a research prototype until this notice is removed.
+This is Phase 0-going-on-1. Both `reputation-accumulator` and the core of `proof-of-observation` (Merkle-inclusion + nullifier) are implemented and tested — 13/13 tests passing across the workspace, including a real local Groth16 setup/prove/verify round trip. What's *not* done: credential-tier enforcement in the circuit (currently unconstrained — see `docs/ARCHITECTURE.md`), any relay implementation, and a real (multi-party) trusted setup ceremony. Nothing here has been externally audited. Treat it as a research prototype until this notice is removed.
 
 ## License
 
