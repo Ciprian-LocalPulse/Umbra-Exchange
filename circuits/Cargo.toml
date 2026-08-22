@@ -1,0 +1,34 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/proof-of-observation",
+    "crates/reputation-accumulator",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/Ciprian-LocalPulse/umbra-exchange"
+
+[workspace.dependencies]
+ark-ff = "0.4"
+ark-ec = "0.4"
+ark-std = "0.4"
+ark-relations = "0.4"
+ark-r1cs-std = "0.4"
+ark-crypto-primitives = { version = "0.4", features = ["r1cs", "merkle_tree", "crh"] }
+ark-groth16 = "0.4"
+ark-bn254 = "0.4"
+ark-snark = "0.4"
+light-poseidon = "0.2.0"
+rand = "0.8"
+
+# Pinned as a direct dependency (even though not used directly by our code)
+# to constrain the resolver: newer zeroize releases require the
+# `edition2024` Cargo feature, which isn't stabilized in the Rust/Cargo
+# version available in this environment (1.75).
+zeroize = "=1.7.0"
+zeroize_derive = "=1.4.3"
+rayon-core = "=1.12.1"
+rayon = "=1.10.0"

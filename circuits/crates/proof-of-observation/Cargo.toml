@@ -1,0 +1,26 @@
+[package]
+name = "proof-of-observation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Groth16 circuit: prove Merkle-inclusion of an indicator in an epoch commitment, gated by an anonymous tier credential, with nullifier-based replay protection."
+
+[dependencies]
+ark-ff = { workspace = true }
+ark-ec = { workspace = true }
+ark-std = { workspace = true }
+ark-relations = { workspace = true }
+ark-r1cs-std = { workspace = true }
+ark-crypto-primitives = { workspace = true }
+ark-groth16 = { workspace = true }
+ark-bn254 = { workspace = true }
+ark-snark = { workspace = true }
+light-poseidon = { workspace = true }
+
+[dev-dependencies]
+rand = { workspace = true }
+zeroize = { workspace = true }
+zeroize_derive = { workspace = true }
+rayon-core = { workspace = true }
+rayon = { workspace = true }
