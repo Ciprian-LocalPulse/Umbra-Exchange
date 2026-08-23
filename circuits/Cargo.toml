@@ -16,7 +16,7 @@ repository = "https://github.com/Ciprian-LocalPulse/umbra-exchange"
 ark-ff = "0.4"
 ark-ec = "0.4"
 ark-std = "0.4"
-ark-relations = "0.4"
+ark-relations = "0.6"
 ark-r1cs-std = "0.4"
 ark-crypto-primitives = { version = "0.4", features = ["r1cs", "merkle_tree", "crh"] }
 ark-groth16 = "0.4"
