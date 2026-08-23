@@ -20,10 +20,10 @@
 //! credential-tier gate rejects unbacked claims.
 
 use ark_bn254::{Bn254, Fr};
-use ark_ff::PrimeField;
 use ark_groth16::{Groth16, ProvingKey};
 use ark_serialize::CanonicalDeserialize;
 use ark_snark::SNARK;
+use proof_of_observation::indicator::indicator_hash_from_raw;
 use proof_of_observation::test_support::sample_observation;
 use rand::{rngs::StdRng, SeedableRng};
 use relay::encoding::{fr_to_hex, proof_to_hex};
@@ -54,11 +54,11 @@ fn main() {
     let pk = ProvingKey::<Bn254>::deserialize_compressed(&pk_bytes[..])
         .expect("umbra.pk is not a valid Groth16 proving key");
 
-    // Demo-only indicator normalization: hash the raw string into a field
-    // element directly. A real deployment needs to fix this precisely in
-    // docs/PROTOCOL_SPEC.md so every contributor and verifier agrees on
-    // the same normalization (e.g. defanged form, case-folding, etc.).
-    let indicator_hash = Fr::from_le_bytes_mod_order(indicator.as_bytes());
+    // Uses the same canonical string->Fr hash the relay checks disclosures
+    // against (proof_of_observation::indicator::indicator_hash_from_raw) —
+    // using anything else here would make this tool's own `indicator`
+    // disclosure field always get rejected by a relay for hash mismatch.
+    let indicator_hash = indicator_hash_from_raw(&indicator);
     let epoch_fr = Fr::from(epoch);
     let salt = Fr::from(rand::random::<u64>());
     let credential_secret = Fr::from(rand::random::<u64>());
@@ -93,6 +93,7 @@ fn main() {
         "nullifier": fr_to_hex(&sample.public.nullifier),
         "min_tier": claimed_min_tier,
         "credential_root": fr_to_hex(&sample.public.credential_root),
+        "indicator": indicator,
         "proof": proof_to_hex(&proof),
     });
 

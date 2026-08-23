@@ -21,6 +21,13 @@ pub struct Inner {
     pub seen_nullifiers: HashSet<String>,
     pub scores: HashMap<(String, u64), u32>,
     pub proof_counts: HashMap<(String, u64), u32>,
+    /// indicator_hash (hex) -> raw indicator string, recorded only when a
+    /// submission both verified AND included a disclosure whose hash
+    /// matched the proof's indicator_hash — see `submit_observation` in
+    /// lib.rs. Indicators never disclosed this way simply never appear
+    /// here, which is exactly what STIX export needs: no entry, no STIX
+    /// object, per `schema/stix_mapping.md`'s "Explicit non-mapping".
+    pub disclosed_indicators: HashMap<String, String>,
 }
 
 pub struct AppState {
@@ -40,6 +47,15 @@ pub struct AppState {
     /// observation scores as tier 0 regardless of its (cryptographically
     /// valid) tier claim.
     pub trusted_credential_roots: HashSet<String>,
+    /// Raw score that maps to STIX `confidence: 100` — see
+    /// `stix::normalize_confidence`. Defaults to 10 (tier-0 weight 1, so
+    /// ~10 independent tier-0 contributors — or fewer higher-tier ones —
+    /// reach full confidence); tune per deployment.
+    pub score_for_full_confidence: u32,
+    /// Identifies this relay in exported STIX objects'
+    /// `x_umbra_relay_id`, so a consumer cross-checking multiple relays
+    /// knows which one produced a given assertion.
+    pub relay_id: String,
     pub inner: Mutex<Inner>,
 }
 
@@ -49,6 +65,8 @@ impl AppState {
             vk,
             weights,
             trusted_credential_roots: HashSet::new(),
+            score_for_full_confidence: 10,
+            relay_id: "umbra-relay-dev".to_string(),
             inner: Mutex::new(Inner::default()),
         }
     }
@@ -58,6 +76,16 @@ impl AppState {
     /// something every caller of `new` needs to think about.
     pub fn with_trusted_credential_roots(mut self, roots: HashSet<String>) -> Self {
         self.trusted_credential_roots = roots;
+        self
+    }
+
+    pub fn with_score_for_full_confidence(mut self, score: u32) -> Self {
+        self.score_for_full_confidence = score;
+        self
+    }
+
+    pub fn with_relay_id(mut self, relay_id: String) -> Self {
+        self.relay_id = relay_id;
         self
     }
 }

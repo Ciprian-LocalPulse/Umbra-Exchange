@@ -33,6 +33,7 @@
 //! party that could have retained toxic waste from that local setup — see
 //! docs/THREAT_MODEL.md.
 
+pub mod indicator;
 pub mod poseidon_params;
 
 /// Test-support helpers, exposed behind the `test-support` feature so other

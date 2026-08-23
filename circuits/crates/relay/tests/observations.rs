@@ -8,6 +8,7 @@ use ark_groth16::Groth16;
 use ark_snark::SNARK;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use proof_of_observation::indicator::indicator_hash_from_raw;
 use proof_of_observation::test_support::sample_observation;
 use rand::rngs::OsRng;
 use relay::encoding::{fr_to_hex, proof_to_hex};
@@ -102,6 +103,52 @@ fn build_request_body_with_credential(
     })
 }
 
+/// Same idea as `build_request_body`, but keyed by a raw indicator string
+/// (hashed via the same canonical function the relay checks disclosures
+/// against) rather than a bare `Fr`, and with control over whether the
+/// disclosure field is included — for exercising the disclosure/STIX
+/// export path specifically.
+fn build_request_body_for_indicator(
+    pk: &ark_groth16::ProvingKey<Bn254>,
+    raw_indicator: &str,
+    epoch: u64,
+    claimed_tier: u64,
+    disclose: bool,
+) -> Value {
+    let indicator_hash = indicator_hash_from_raw(raw_indicator);
+    let epoch_fr = Fr::from(epoch);
+    let salt = Fr::from(rand::random::<u64>());
+    let credential_secret = Fr::from(rand::random::<u64>());
+    let min_tier = Fr::from(claimed_tier);
+    let credential_tier = Fr::from(claimed_tier);
+
+    let sample = sample_observation(
+        indicator_hash,
+        epoch_fr,
+        salt,
+        credential_secret,
+        credential_tier,
+        min_tier,
+    );
+    let mut rng = OsRng;
+    let proof =
+        Groth16::<Bn254>::prove(pk, sample.circuit, &mut rng).expect("proving should succeed");
+
+    let mut body = json!({
+        "indicator_hash": fr_to_hex(&sample.public.indicator_hash),
+        "epoch": epoch,
+        "root": fr_to_hex(&sample.public.root),
+        "nullifier": fr_to_hex(&sample.public.nullifier),
+        "min_tier": claimed_tier,
+        "credential_root": fr_to_hex(&sample.public.credential_root),
+        "proof": proof_to_hex(&proof),
+    });
+    if disclose {
+        body["indicator"] = json!(raw_indicator);
+    }
+    body
+}
+
 async fn post_observation(app: &axum::Router, body: &Value) -> (StatusCode, Value) {
     let response = app
         .clone()
@@ -130,6 +177,24 @@ async fn get_score(app: &axum::Router, indicator_hash_hex: &str, epoch: u64) -> 
             Request::builder()
                 .method("GET")
                 .uri(format!("/v1/score/{indicator_hash_hex}/{epoch}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    serde_json::from_slice(&bytes).unwrap()
+}
+
+async fn export_stix(app: &axum::Router, threshold: u32) -> Value {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/v1/export/stix?threshold={threshold}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -300,4 +365,93 @@ async fn score_endpoint_returns_zero_for_unknown_indicator() {
     let resp = get_score(&fx.app, &fr_to_hex(&Fr::from(999999u64)), 1).await;
     assert_eq!(resp["score"], 0);
     assert_eq!(resp["proof_count"], 0);
+}
+
+#[tokio::test]
+async fn disclosed_indicator_appears_in_stix_export() {
+    let fx = setup();
+    let body = build_request_body_for_indicator(&fx.pk, "evil.example", 20260822, 0, true);
+
+    let (status, resp) = post_observation(&fx.app, &body).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(resp["accepted"], true);
+
+    let bundle = export_stix(&fx.app, 1).await;
+    let objects = bundle["objects"].as_array().unwrap();
+    assert_eq!(objects.len(), 1);
+    assert_eq!(
+        objects[0]["pattern"],
+        "[domain-name:value = 'evil.example']"
+    );
+    assert_eq!(objects[0]["x_umbra_proof_count"], 1);
+}
+
+#[tokio::test]
+async fn undisclosed_indicator_is_excluded_from_stix_export() {
+    let fx = setup();
+    // Same indicator, valid proof, but no `indicator` field — never
+    // disclosed, so it must never surface as a STIX pattern.
+    let body = build_request_body_for_indicator(&fx.pk, "quiet.example", 20260822, 0, false);
+
+    let (status, resp) = post_observation(&fx.app, &body).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        resp["accepted"], true,
+        "the proof itself is still valid and scored"
+    );
+
+    let bundle = export_stix(&fx.app, 1).await;
+    let objects = bundle["objects"].as_array().unwrap();
+    assert!(
+        objects.is_empty(),
+        "an undisclosed indicator must never appear in STIX export, per schema/stix_mapping.md"
+    );
+}
+
+#[tokio::test]
+async fn stix_export_respects_threshold() {
+    let fx = setup();
+    let body =
+        build_request_body_for_indicator(&fx.pk, "belowthreshold.example", 20260822, 0, true);
+    let (_, resp) = post_observation(&fx.app, &body).await;
+    assert_eq!(resp["score"], 1); // tier-0 weight
+
+    let bundle = export_stix(&fx.app, 5).await;
+    assert!(
+        bundle["objects"].as_array().unwrap().is_empty(),
+        "score 1 must not clear a threshold of 5"
+    );
+
+    let bundle = export_stix(&fx.app, 1).await;
+    assert_eq!(bundle["objects"].as_array().unwrap().len(), 1);
+}
+
+/// Regression test for exactly the attack `submit_observation`'s
+/// disclosure-check comment describes: attaching a disclosure that
+/// doesn't actually correspond to the proof's real indicator_hash must
+/// reject the whole submission, not just the disclosure.
+#[tokio::test]
+async fn mismatched_disclosure_rejects_the_whole_submission() {
+    let fx = setup();
+    let mut body = build_request_body_for_indicator(&fx.pk, "real.example", 20260822, 0, true);
+    // Swap in a different string than the one actually proven.
+    body["indicator"] = json!("fake.example");
+
+    let (status, resp) = post_observation(&fx.app, &body).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(resp["accepted"], false);
+    assert!(resp["reason"]
+        .as_str()
+        .unwrap()
+        .contains("does not hash to"));
+
+    // And it must not have been scored at all, disclosed or not.
+    let score = get_score(
+        &fx.app,
+        &fr_to_hex(&indicator_hash_from_raw("real.example")),
+        20260822,
+    )
+    .await;
+    assert_eq!(score["score"], 0);
 }
