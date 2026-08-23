@@ -32,6 +32,7 @@ fn setup() -> Fixture {
         Fr::from(0u64),
         Fr::from(0u64),
         Fr::from(0u64),
+        Fr::from(0u64),
     );
     let mut rng = OsRng;
     let (pk, vk) = Groth16::<Bn254>::circuit_specific_setup(sample.circuit, &mut rng)
@@ -44,21 +45,48 @@ fn setup() -> Fixture {
 
 /// Builds a real, valid submit-observation JSON body for the given
 /// indicator/epoch/tier claim, using a freshly-random credential secret
-/// (i.e. *not* tied to any real credential — deliberately, since that's
-/// exactly the gap the min_tier test below needs to exercise).
+/// and an *honest* credential (actual tier == claimed tier) in a
+/// throwaway credential tree. Since `setup()`'s relay starts with an
+/// empty trusted-roots set, every request built this way still scores as
+/// tier 0 regardless of the claim — see
+/// `claimed_high_tier_is_not_trusted_for_scoring_weight` below, which
+/// exercises exactly that.
 fn build_request_body(
     pk: &ark_groth16::ProvingKey<Bn254>,
     indicator: u64,
     epoch: u64,
     claimed_tier: u64,
 ) -> Value {
+    build_request_body_with_credential(pk, indicator, epoch, claimed_tier, claimed_tier)
+}
+
+/// Same as `build_request_body`, but lets the caller set the *actual*
+/// credential tier independently of the *claimed* tier — so tests can
+/// build proofs where the two disagree, in either direction. When they
+/// disagree unfavorably (actual < claimed), the circuit itself should
+/// refuse to produce a satisfying proof.
+fn build_request_body_with_credential(
+    pk: &ark_groth16::ProvingKey<Bn254>,
+    indicator: u64,
+    epoch: u64,
+    claimed_tier: u64,
+    actual_credential_tier: u64,
+) -> Value {
     let indicator_hash = Fr::from(indicator);
     let epoch_fr = Fr::from(epoch);
     let salt = Fr::from(rand::random::<u64>());
     let credential_secret = Fr::from(rand::random::<u64>());
     let min_tier = Fr::from(claimed_tier);
+    let credential_tier = Fr::from(actual_credential_tier);
 
-    let sample = sample_observation(indicator_hash, epoch_fr, salt, credential_secret, min_tier);
+    let sample = sample_observation(
+        indicator_hash,
+        epoch_fr,
+        salt,
+        credential_secret,
+        credential_tier,
+        min_tier,
+    );
     let mut rng = OsRng;
     let proof =
         Groth16::<Bn254>::prove(pk, sample.circuit, &mut rng).expect("proving should succeed");
@@ -69,6 +97,7 @@ fn build_request_body(
         "root": fr_to_hex(&sample.public.root),
         "nullifier": fr_to_hex(&sample.public.nullifier),
         "min_tier": claimed_tier,
+        "credential_root": fr_to_hex(&sample.public.credential_root),
         "proof": proof_to_hex(&proof),
     })
 }
@@ -125,16 +154,20 @@ async fn valid_proof_is_accepted_and_scored_at_tier_zero() {
     assert_eq!(resp["score"], 1);
 }
 
-/// Regression test for the vulnerability this module's `submit_observation`
-/// doc comment warns about: a caller claiming a high `min_tier` with no
-/// real credential behind it must NOT receive that tier's weight. Before
-/// this was fixed, this exact request scored 8 (the tier-3 weight) instead
-/// of 1 (the tier-0 weight) — see the module docs for why.
+/// The tier gate is now cryptographically enforced by the circuit itself
+/// (an honest, valid tier-3 credential really does prove tier>=3) — but
+/// that's relative to *some* credential tree. This relay's `setup()`
+/// starts with an empty trusted-roots allowlist (the Phase 0 default: no
+/// real issuer exists yet), so even a perfectly valid tier-3 proof must
+/// still score as tier 0, because this relay has no reason to trust the
+/// specific tree the claim was checked against. See
+/// `claim_is_trusted_when_credential_root_is_allowlisted` below for the
+/// contrasting case.
 #[tokio::test]
 async fn claimed_high_tier_is_not_trusted_for_scoring_weight() {
     let fx = setup();
-    // claimed_tier = 3 (weight 8), but credential_secret is random — no
-    // real credential backs this claim, and the circuit doesn't check it.
+    // An honest tier-3 credential (actual == claimed), but its credential
+    // tree is a throwaway this test built itself — not in any allowlist.
     let body = build_request_body(&fx.pk, 222, 20260822, 3);
 
     let (status, resp) = post_observation(&fx.app, &body).await;
@@ -143,8 +176,73 @@ async fn claimed_high_tier_is_not_trusted_for_scoring_weight() {
     assert_eq!(resp["accepted"], true);
     assert_eq!(
         resp["score"], 1,
-        "an unbacked min_tier=3 claim must score as tier 0 (weight 1), not tier 3 (weight 8)"
+        "an untrusted credential_root must score as tier 0 (weight 1) even with a valid tier-3 proof"
     );
+}
+
+/// Contrasts with the test above: same honest tier-3 proof, but this time
+/// the relay's trusted-roots allowlist includes the credential_root the
+/// proof was checked against, so the (cryptographically real) tier claim
+/// is honored for scoring weight.
+#[tokio::test]
+async fn claim_is_trusted_when_credential_root_is_allowlisted() {
+    let sample = sample_observation(
+        Fr::from(0u64),
+        Fr::from(0u64),
+        Fr::from(0u64),
+        Fr::from(0u64),
+        Fr::from(0u64),
+        Fr::from(0u64),
+    );
+    let mut rng = OsRng;
+    let (pk, vk) = Groth16::<Bn254>::circuit_specific_setup(sample.circuit, &mut rng)
+        .expect("local setup should succeed for a well-formed circuit");
+
+    let body = build_request_body(&pk, 223, 20260822, 3);
+    let credential_root_hex = body["credential_root"].as_str().unwrap().to_string();
+
+    let mut trusted = std::collections::HashSet::new();
+    trusted.insert(credential_root_hex);
+    let state = Arc::new(
+        AppState::new(vk, TierWeights::default_weights()).with_trusted_credential_roots(trusted),
+    );
+    let app = relay::router(state);
+
+    let (status, resp) = post_observation(&app, &body).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(resp["accepted"], true);
+    assert_eq!(
+        resp["score"], 8,
+        "an honest tier-3 proof against an allowlisted credential_root must score at tier-3 weight"
+    );
+}
+
+/// The credential-tier gate's actual security property: a *dishonest*
+/// claim — actual credential tier below what's claimed — can't even be
+/// turned into a proof. `Groth16::prove` asserts constraint satisfaction
+/// internally and panics rather than silently emitting a proof that would
+/// later fail verification — i.e. the gate fails closed at the earliest
+/// possible point, not just at the relay's `Groth16::verify` call. This is
+/// the in-circuit counterpart to the (now-historical) relay-layer
+/// vulnerability regression-tested elsewhere in this file.
+#[test]
+#[should_panic(expected = "cs.is_satisfied()")]
+fn unbacked_tier_claim_cannot_even_be_proven() {
+    let sample = sample_observation(
+        Fr::from(0u64),
+        Fr::from(0u64),
+        Fr::from(0u64),
+        Fr::from(0u64),
+        Fr::from(0u64),
+        Fr::from(0u64),
+    );
+    let mut setup_rng = OsRng;
+    let (pk, _vk) = Groth16::<Bn254>::circuit_specific_setup(sample.circuit, &mut setup_rng)
+        .expect("local setup should succeed for a well-formed circuit");
+
+    // Actual credential tier 0, but claiming tier 3.
+    let _ = build_request_body_with_credential(&pk, 224, 20260822, 3, 0);
 }
 
 #[tokio::test]

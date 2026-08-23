@@ -46,6 +46,7 @@ fn main() {
         Fr::from(0u64),
         Fr::from(0u64),
         Fr::from(0u64),
+        Fr::from(0u64),
     );
 
     let mut rng = OsRng;

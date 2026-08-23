@@ -6,15 +6,20 @@
 //! logic here is unit-testable without a real TCP listener, and so
 //! `keygen`/`prove` can reuse it (e.g. `encoding`) without duplicating it.
 //!
-//! Phase 0 caveats that matter for anyone reading this as a spec: proofs
+//! Phase 1 caveats that matter for anyone reading this as a spec: proofs
 //! are only checked against whatever verifying key the relay was started
 //! with (see `umbra-relay-keygen`'s warning banner — it's a local,
-//! non-ceremony setup), and `min_tier` is currently an unconstrained public
-//! input in the circuit itself (see proof-of-observation's lib.rs docs).
-//! Because of that, this relay does NOT use the claimed `min_tier` for
-//! scoring weight — every accepted observation is scored as tier 0 (see
-//! `submit_observation`) until an in-circuit tier gadget lands. Treat this
-//! deployment as a research prototype — see docs/THREAT_MODEL.md.
+//! non-ceremony setup). The circuit now cryptographically enforces
+//! `credential_tier >= min_tier` *relative to whichever credential tree
+//! `credential_root` names* — but the circuit has no opinion on whether
+//! that tree was honestly vetted by a real issuer. That's a policy
+//! question this relay answers via `trusted_credential_roots`: a
+//! submission's claimed `min_tier` is only trusted for scoring weight if
+//! its `credential_root` is in that allowlist; otherwise (including the
+//! Phase 0 default of an empty allowlist, since no real issuer exists
+//! yet) every observation is scored as tier 0, regardless of what the
+//! proof itself attests to. See `submit_observation` and
+//! docs/THREAT_MODEL.md.
 
 pub mod encoding;
 pub mod state;
@@ -55,9 +60,15 @@ pub struct SubmitObservationRequest {
     pub root: String,
     /// Hex-encoded `Fr` — replay-protection nullifier.
     pub nullifier: String,
-    /// Claimed tier (0-3). NOT cryptographically enforced yet — see module
-    /// docs and proof-of-observation's lib.rs.
+    /// Claimed tier (0-3). Cryptographically checked against
+    /// `credential_root` as of the tier-gate gadget in
+    /// proof-of-observation — a mismatched claim now fails proof
+    /// verification, not just this relay's (former) trust-the-claim
+    /// behavior. See module docs.
     pub min_tier: u8,
+    /// Hex-encoded `Fr` — root of the issuer-published credential tree
+    /// this proof's tier claim was checked against.
+    pub credential_root: String,
     /// Hex-encoded, canonically-serialized Groth16 `Proof<Bn254>`.
     pub proof: String,
 }
@@ -93,6 +104,10 @@ async fn submit_observation(
         Ok(v) => v,
         Err(e) => return rejected(&e.to_string()),
     };
+    let credential_root = match fr_from_hex(&req.credential_root) {
+        Ok(v) => v,
+        Err(e) => return rejected(&e.to_string()),
+    };
     let proof: Proof<Bn254> = match proof_from_hex(&req.proof) {
         Ok(v) => v,
         Err(e) => return rejected(&e.to_string()),
@@ -100,11 +115,18 @@ async fn submit_observation(
 
     // Field-element ordering here must match `PublicInputs`'s field order
     // in proof-of-observation's lib.rs (indicator_hash, epoch, root,
-    // nullifier, min_tier) — Groth16::verify has no way to catch a
-    // silently-reordered public-input vector.
+    // nullifier, min_tier, credential_root) — Groth16::verify has no way
+    // to catch a silently-reordered public-input vector.
     let epoch_fr = Fr::from(req.epoch);
     let min_tier_fr = Fr::from(req.min_tier as u64);
-    let public_inputs = vec![indicator_hash, epoch_fr, root, nullifier, min_tier_fr];
+    let public_inputs = vec![
+        indicator_hash,
+        epoch_fr,
+        root,
+        nullifier,
+        min_tier_fr,
+        credential_root,
+    ];
 
     let valid = match Groth16::<Bn254>::verify(&state.vk, &public_inputs, &proof) {
         Ok(v) => v,
@@ -119,23 +141,34 @@ async fn submit_observation(
     // field-equal encodings can't split one indicator's score across keys.
     let indicator_key = fr_to_hex(&indicator_hash);
     let nullifier_key = fr_to_hex(&nullifier);
+    let credential_root_key = fr_to_hex(&credential_root);
 
-    // SECURITY: `req.min_tier` is the caller's *claim*, not a
-    // cryptographically-verified fact — the circuit does not constrain
-    // `min_tier` yet (see proof-of-observation's lib.rs and
-    // docs/THREAT_MODEL.md's "credential-tier enforcement" caveat), so a
-    // valid proof can carry *any* min_tier value with zero connection to a
-    // real credential. Weighting on the claimed value would let a single
-    // attacker claim tier 3 (8x weight) for free. Every observation is
-    // therefore scored as tier 0 here, regardless of what was claimed,
-    // until an in-circuit tier gadget lands. `min_tier` is still checked
-    // as a public input above (so a tampered proof still fails to
-    // verify), it's just not trusted for *weighting* purposes.
+    // The circuit now cryptographically enforces `credential_tier >=
+    // min_tier` — but only *relative to whichever credential tree
+    // `credential_root` names*. That proves internal consistency, not
+    // that the tree was honestly vetted by a real issuer: anyone can
+    // build their own throwaway credential tree (e.g. with the same
+    // `umbra-relay-prove` tooling) and claim any tier they like against
+    // it. So the claimed tier is only trusted for scoring weight when
+    // `credential_root` is in this relay's configured allowlist of known
+    // issuer roots; otherwise (including the Phase 0 default of an empty
+    // allowlist — no real issuer exists yet) every observation scores as
+    // tier 0, same as before the tier gadget existed. See module docs and
+    // docs/THREAT_MODEL.md.
+    let tier = if state
+        .trusted_credential_roots
+        .contains(&credential_root_key)
+    {
+        req.min_tier
+    } else {
+        0
+    };
+
     let observation = VerifiedObservation {
         indicator_hash: indicator_key.clone(),
         epoch: req.epoch,
         nullifier: nullifier_key,
-        tier: 0,
+        tier,
     };
 
     let mut inner = state.inner.lock().expect("relay state mutex poisoned");

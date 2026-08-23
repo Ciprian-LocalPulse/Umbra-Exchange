@@ -32,6 +32,14 @@ pub struct AppState {
     /// retained the toxic waste from that local setup.
     pub vk: VerifyingKey<Bn254>,
     pub weights: TierWeights,
+    /// Hex-encoded credential-tree roots this relay treats as belonging to
+    /// a real, vetted issuer. A submission's claimed `min_tier` is only
+    /// trusted for scoring weight when its `credential_root` is in this
+    /// set — see `submit_observation` in lib.rs for why. Empty by default:
+    /// Phase 0 has no real issuer yet, so nothing is trusted and every
+    /// observation scores as tier 0 regardless of its (cryptographically
+    /// valid) tier claim.
+    pub trusted_credential_roots: HashSet<String>,
     pub inner: Mutex<Inner>,
 }
 
@@ -40,7 +48,16 @@ impl AppState {
         Self {
             vk,
             weights,
+            trusted_credential_roots: HashSet::new(),
             inner: Mutex::new(Inner::default()),
         }
+    }
+
+    /// Builder-style setter, since trusted issuer roots are an optional,
+    /// Phase-0-typically-empty piece of relay configuration rather than
+    /// something every caller of `new` needs to think about.
+    pub fn with_trusted_credential_roots(mut self, roots: HashSet<String>) -> Self {
+        self.trusted_credential_roots = roots;
+        self
     }
 }
