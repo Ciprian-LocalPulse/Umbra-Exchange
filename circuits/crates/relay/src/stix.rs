@@ -83,7 +83,16 @@ pub fn epoch_validity_window(epoch: u64) -> Option<(String, String)> {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
         4 | 6 | 9 | 11 => 30,
         2 => {
-            let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+            // Written with `.rem_euclid` rather than `year % 4 == 0` etc.
+            // on purpose: newer clippy's `manual_is_multiple_of` lint
+            // wants `year.is_multiple_of(4)` instead, but that method
+            // isn't available on this workspace's documented toolchain
+            // floor (rustc 1.75, see docs/BUILD_NOTES.md and this crate's
+            // CI matrix) — `is_multiple_of` on integers stabilized later.
+            // `rem_euclid` is equivalent for non-negative operands and
+            // compiles on both.
+            let leap =
+                (year.rem_euclid(4) == 0 && year.rem_euclid(100) != 0) || year.rem_euclid(400) == 0;
             if leap {
                 29
             } else {
