@@ -53,34 +53,36 @@ umbra-exchange/
 │   ├── ARCHITECTURE.md       # system design, components, data flow
 │   ├── PROTOCOL_SPEC.md      # the actual protocol: message formats, proof statements
 │   └── THREAT_MODEL.md       # what this protects against, what it doesn't
-├── circuits/                 # Rust workspace, arkworks-based ZK circuits
+├── circuits/                 # Rust workspace, arkworks-based ZK circuits + relay + PSI
 │   └── crates/
 │       ├── proof-of-observation/
-│       └── reputation-accumulator/
+│       ├── reputation-accumulator/
+│       ├── relay/             # reference relay: verifies proofs, scores, STIX export
+│       └── psi/                # private set intersection for blocklist checks (DH-PSI, Ristretto255 — not arkworks/BN254, see its module docs for why)
 ├── schema/                   # STIX 2.1 / MISP interop mappings
 └── scripts/
 ```
 
 ## Status honestly
 
-This is Phase 0.
+Phase 1: the core cryptographic primitives are implemented and tested; governance, real deployment, and hardening are not.
 
-`reputation-accumulator` is implemented and tested:
+**Implemented and tested:**
 
-```bash
-cargo test -p reputation-accumulator
-```
+- `reputation-accumulator` — aggregate scoring, tier weighting, nullifier-based replay rejection. `cargo test -p reputation-accumulator`: **7/7**.
+- `proof-of-observation` — Merkle-inclusion of a disclosed indicator against a published epoch root, nullifier-based double-disclosure prevention, AND a cryptographically-enforced credential-tier gate (a second Merkle tree proves `credential_tier >= min_tier` without revealing which credential or the exact tier). `cargo test -p proof-of-observation --features test-support`: **19/19**.
+- `relay` — reference HTTP service: verifies proofs, rejects nullifier replays, aggregates confidence scores, and exports STIX 2.1 bundles for disclosed indicators. `cargo test -p relay`: **20/20**.
+- `psi` — two-party private set intersection (DH-PSI over Ristretto255, not arkworks/BN254 — see its module docs for why) for checking one indicator against someone else's private blocklist without either side revealing their full list. `cargo test -p psi`: **8/8**.
 
-**7/7 passing.**
+Run everything: `cd circuits && cargo test --workspace` — **62/62** as of this writing, `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` both clean.
 
-`proof-of-observation`'s circuit skeleton compiles against real arkworks 0.4 crates, but the actual constraints are still TODO:
+**Not implemented / explicitly out of scope so far:**
 
-- Merkle path
-- Poseidon leaf hashing
-- credential gadget
-- nullifier
+- **Real trusted setup ceremony.** Every Groth16 proving/verifying key in this repo (including `umbra-relay-keygen`'s) comes from a local, single-party, non-ceremony setup. Treat every proof verified against one of these keys as unsound against a party who could have retained that setup's toxic waste — see [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
+- **Credential issuance governance.** The circuit can prove "this secret is in the credential tree with this tier," but who gets to publish a trustworthy credential tree in the first place is a policy question, not a cryptography one — see [`docs/PROTOCOL_SPEC.md`](docs/PROTOCOL_SPEC.md) §2.
+- **MISP export**, real network wiring for `psi` (currently a tested library + single-process demo, not yet a second network service), indicator-normalization hardening (defanging, URL/IP canonicalization), and everything else `docs/ARCHITECTURE.md` and `docs/THREAT_MODEL.md` list as open.
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the exact breakdown and [`docs/BUILD_NOTES.md`](docs/BUILD_NOTES.md) for toolchain notes.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full breakdown and [`docs/BUILD_NOTES.md`](docs/BUILD_NOTES.md) for toolchain notes.
 
 > **Nothing here has been audited. Treat it as a research prototype until this notice is removed.**
 

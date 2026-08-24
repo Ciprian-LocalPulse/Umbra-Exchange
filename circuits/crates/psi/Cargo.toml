@@ -1,0 +1,17 @@
+[package]
+name = "psi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Two-party private set intersection (DH-PSI over Ristretto255) for checking whether one indicator is in someone else's private blocklist without either side revealing their full list — README point 3. Deliberately independent of the Groth16/BN254 machinery used elsewhere in this workspace; see module docs for why."
+
+[dependencies]
+proof-of-observation = { path = "../proof-of-observation" }
+curve25519-dalek = { workspace = true, features = ["digest", "rand_core", "zeroize"] }
+sha2 = { workspace = true }
+rand = { workspace = true }
+zeroize = { workspace = true, features = ["derive"] }
+
+[[example]]
+name = "demo"

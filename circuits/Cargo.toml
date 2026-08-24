@@ -4,6 +4,7 @@ members = [
     "crates/proof-of-observation",
     "crates/reputation-accumulator",
     "crates/relay",
+    "crates/psi",
 ]
 
 [workspace.package]
@@ -33,6 +34,18 @@ serde = "1"
 serde_json = "1"
 hex = "0.4"
 tower = "0.5"
+
+# psi crate — deliberately NOT arkworks/BN254: DH-PSI needs a proper,
+# already-implemented hash-to-group primitive, and neither ark-bn254 nor
+# ark-ec ship one for BN254's G1 (checked: ark-ec's hashing module only
+# has SWU/Wahby-Boneh maps, which need isogeny parameters nobody has
+# derived for this curve; deriving them here would be exactly the kind of
+# unreviewed cryptographic parameter generation this project's own
+# SECURITY.md warns against). curve25519-dalek's Ristretto group ships a
+# safe, standard, widely-audited hash-to-group construction
+# (RistrettoPoint::hash_from_bytes) instead — see psi crate's module docs.
+curve25519-dalek = "4"
+sha2 = "0.10"
 
 # Pinned as a direct dependency (even though not used directly by our code)
 # to constrain the resolver: newer zeroize releases require the
