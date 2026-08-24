@@ -318,7 +318,8 @@ mod tests {
         // "this returns Err, it doesn't panic" — this test reaching its
         // final assert already demonstrates the "doesn't panic" half.
         let bytes = [0xFFu8; 32];
-        let garbage = CompressedRistretto::from_slice(&bytes).expect("from_slice only checks length, not validity");
+        let garbage = CompressedRistretto::from_slice(&bytes)
+            .expect("from_slice only checks length, not validity");
         let result = respond_to_query(&holder_key, garbage);
         assert!(matches!(result, Err(PsiError::InvalidPoint)));
     }
