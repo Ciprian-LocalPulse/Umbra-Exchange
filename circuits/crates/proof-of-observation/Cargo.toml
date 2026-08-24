@@ -19,11 +19,26 @@ ark-crypto-primitives = { workspace = true }
 ark-groth16 = { workspace = true }
 ark-bn254 = { workspace = true }
 ark-snark = { workspace = true }
+ark-serialize = { workspace = true }
 light-poseidon = { workspace = true }
+# Only actually used by the fingerprint/verify-ceremony-params binaries
+# (both gated behind required-features = ["test-support"]) — kept as a
+# normal, not dev, dependency because binaries can't link dev-dependencies.
+rand = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
 
 [dev-dependencies]
-rand = { workspace = true }
 zeroize = { workspace = true }
 zeroize_derive = { workspace = true }
 rayon-core = { workspace = true }
 rayon = { workspace = true }
+
+[[bin]]
+name = "fingerprint"
+required-features = ["test-support"]
+
+[[bin]]
+name = "verify-ceremony-params"
+path = "src/bin/verify_ceremony_params.rs"
+required-features = ["test-support"]
