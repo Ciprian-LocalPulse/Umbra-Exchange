@@ -40,13 +40,19 @@ jobs:
         working-directory: circuits
         run: cargo test -p proof-of-observation --features test-support --verbose
 
+      - name: cargo test -p ceremony
+        working-directory: circuits
+        run: cargo test -p ceremony --features test-support --verbose
+
       - name: cargo test --workspace
         working-directory: circuits
-        run: cargo test --workspace --verbose
+        run: cargo test --workspace --features test-support --verbose
 
       - name: build ceremony tooling (test-support-gated binaries)
         working-directory: circuits
-        run: cargo build -p proof-of-observation --features test-support --bins --verbose
+        run: |
+          cargo build -p proof-of-observation --features test-support --bins --verbose
+          cargo build -p ceremony --features test-support --bins --verbose
 
   lint:
     name: fmt + clippy

@@ -1,0 +1,47 @@
+[package]
+name = "ceremony"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Groth16 Phase 2 trusted-setup MPC ceremony machinery for proof-of-observation, ported from celo-org/snark-setup to modern arkworks 0.4. Not independently audited — see docs/CEREMONY.md."
+
+[dependencies]
+ark-ec = { workspace = true }
+ark-ff = { workspace = true }
+ark-std = { workspace = true }
+ark-serialize = { workspace = true }
+ark-groth16 = { workspace = true }
+ark-relations = { workspace = true }
+rand = { workspace = true }
+rand_chacha = "0.3"
+blake2 = "0.10"
+zeroize = { workspace = true, features = ["derive"] }
+hex = { workspace = true }
+# Only actually used by ceremony-init (gated behind required-features =
+# ["test-support"] below) and this crate's own integration tests, which
+# need a way to build a real ProofOfObservationCircuit instance. Kept as a
+# normal (not dev) dependency because binaries can't link dev-dependencies
+# — same pattern proof-of-observation's own fingerprint/verify-ceremony-params
+# binaries already use.
+proof-of-observation = { path = "../proof-of-observation" }
+ark-bn254 = { workspace = true }
+
+[dev-dependencies]
+ark-snark = { workspace = true }
+
+[features]
+test-support = ["proof-of-observation/test-support"]
+
+[[bin]]
+name = "ceremony-init"
+path = "src/bin/init.rs"
+required-features = ["test-support"]
+
+[[bin]]
+name = "ceremony-contribute"
+path = "src/bin/contribute.rs"
+
+[[bin]]
+name = "ceremony-verify"
+path = "src/bin/verify.rs"

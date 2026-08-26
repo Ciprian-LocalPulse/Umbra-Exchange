@@ -29,6 +29,22 @@ Three honest paths forward, in order of how much new risk each introduces:
 
 ## What's safe to build ourselves right now, and is done as of this commit
 
+**Update:** the `ceremony` crate now implements the actual Phase 2 contribution/verification protocol (option 1 from the list above), ported from `celo-org/snark-setup`'s `phase2` crate to modern arkworks 0.4. What follows below (the fingerprint/verify-ceremony-params tools) remains accurate and complementary; this section describes what's new.
+
+**What `ceremony` does and does not cover** — read this before trusting its output for anything real:
+
+- **Implemented, faithfully ported, and tested**: the delta-recontribution chain itself — `Keypair::new` (the signature-of-knowledge construction), `hash_to_g2`, `same_ratio`/`check_same_ratio` (the pairing-based verification), `merge_pairs` (batched ratio checking), and `MPCParameters::contribute`/`verify`/`verify_transcript`. This is the part whose soundness the entire ceremony rests on: as long as *one* contributor across the whole chain destroyed their secret honestly, the final parameters are sound. Verified end to end, not just unit-by-unit: a 3-contributor chain run through the actual CLI tools, checked as a whole with `ceremony-verify`, and — the test that actually matters — a real Groth16 proof built with the final proving key verifies against the final verifying key for `ProofOfObservationCircuit`.
+- **NOT implemented**: ingesting real Phase 1 (Powers of Tau) output. `MPCParameters::new_placeholder` builds a starting point by sampling `alpha`/`beta`/`gamma` **locally** (same "local, non-ceremony, nobody but you destroyed this" caveat as `umbra-relay-keygen`) and fixing `delta = 1` — which is algebraically the correct starting state for the contribution chain to build on (confirmed against the reference: it also always starts `delta_g1`/`delta_g2` at the plain curve generator), but is NOT itself derived from any real Phase 1 ceremony. A real deployment needs to replace `new_placeholder` with actual Phase 1 ingestion (the FFT/Lagrange-evaluation step the reference implements in its own `phase2::parameters::eval`, deliberately not ported here) before the *starting point* — as opposed to the contribution chain on top of it — is trustworthy.
+
+**A bug this port's own tests caught, worth recording**: the first version of `new_placeholder` sampled random G1/G2 "generators" instead of using the curve's actual fixed generator. This passed every isolated unit test (which don't exercise a full contribution+verify round trip) but failed the end-to-end integration test with "inconsistent G2 delta" — because `verify`'s signature-of-knowledge check is pinned to the real, universally-known generator, not whatever basis a given deployment happens to use. Fixed by using `E::G1::generator()`/`E::G2::generator()` directly, confirmed correct against the reference's own `prime_subgroup_generator()` usage throughout. Recorded here as a concrete illustration of why the full end-to-end test (not just isolated unit tests of each primitive) is what actually caught a real, non-superficial mistake in this port.
+
+**Available tools** (all under `circuits/crates/ceremony`):
+- `ceremony-init <output-path>` (`--features test-support`) — builds the placeholder starting point described above for `ProofOfObservationCircuit`, prints its `cs_hash` for participants to confirm.
+- `ceremony-contribute <params-file>` — applies one contribution in place; prints the contribution's hash for the contributor to publish as their attestation.
+- `ceremony-verify <params-file>` — verifies an entire chain from a single file, printing every contribution's hash on success.
+
+### Tools that were already available before this crate
+
 Two tools that use only already-tested arkworks machinery — no new cryptographic protocol code, just serialization and hashing:
 
 - **`fingerprint`** (`cargo run -p proof-of-observation --features test-support --bin fingerprint`): hashes `ProofOfObservationCircuit`'s actual R1CS matrices (not just variable counts — two different circuits could coincidentally share those) via SHA-512. Every ceremony participant should confirm they get the *same* fingerprint before contributing — this is what stops "half the participants contributed to one version of the circuit, half to a subtly different one" from going unnoticed. This exact pattern (`cs_hash` alongside a contribution transcript) is standard practice in every reference implementation found during research.

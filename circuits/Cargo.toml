@@ -5,6 +5,7 @@ members = [
     "crates/reputation-accumulator",
     "crates/relay",
     "crates/psi",
+    "crates/ceremony",
 ]
 
 [workspace.package]
@@ -46,6 +47,10 @@ tower = "0.5"
 # (RistrettoPoint::hash_from_bytes) instead — see psi crate's module docs.
 curve25519-dalek = "4"
 sha2 = "0.10"
+
+# ceremony crate — Phase 2 MPC, ported from celo-org/snark-setup
+rand_chacha = "0.3"
+blake2 = "0.10"
 
 # Pinned as a direct dependency (even though not used directly by our code)
 # to constrain the resolver: newer zeroize releases require the
