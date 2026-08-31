@@ -214,7 +214,8 @@ mod tests {
         let s = kp1.public_key.s;
         let s_delta = kp1.public_key.s_delta;
         let empty_hash = hash_cs_pubkeys::<Bn254>([0u8; 64], &[], s, s_delta);
-        let with_prior = hash_cs_pubkeys::<Bn254>([0u8; 64], std::slice::from_ref(&kp1.public_key), s, s_delta);
+        let with_prior =
+            hash_cs_pubkeys::<Bn254>([0u8; 64], std::slice::from_ref(&kp1.public_key), s, s_delta);
         assert_ne!(
             empty_hash, with_prior,
             "the transcript must depend on prior contributions, to prevent chain reordering"
