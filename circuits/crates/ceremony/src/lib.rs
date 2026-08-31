@@ -13,10 +13,18 @@
 //! (notably: real Phase 1 / Powers-of-Tau ingestion is NOT implemented
 //! here — see `params::MPCParameters::new_placeholder`'s docs).
 
+pub mod bridge;
 pub mod helpers;
 pub mod keypair;
 pub mod params;
+pub mod phase1;
 
-pub use helpers::{check_same_ratio, hash_to_g2, merge_pairs, same_ratio};
+pub use bridge::{from_phase1, required_domain_size, BridgeError};
+pub use helpers::{
+    check_same_ratio, compute_g2_s, hash_to_g2, merge_pairs, power_pairs, same_ratio,
+};
 pub use keypair::{hash_cs_pubkeys, Keypair, PrivateKey, PublicKey};
 pub use params::{verify_transcript, CeremonyError, MPCParameters};
+// phase1's PublicKey/PrivateKey/Keypair intentionally are NOT re-exported
+// here — they'd collide with the Phase 2 types above. Access them via
+// `ceremony::phase1::PublicKey` etc.

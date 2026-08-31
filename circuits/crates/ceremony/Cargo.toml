@@ -26,6 +26,7 @@ hex = { workspace = true }
 # binaries already use.
 proof-of-observation = { path = "../proof-of-observation" }
 ark-bn254 = { workspace = true }
+ark-poly = "0.4"
 
 [dev-dependencies]
 ark-snark = { workspace = true }

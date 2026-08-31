@@ -12,6 +12,7 @@ use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::PrimeField;
 use ark_serialize::CanonicalSerialize;
 use ark_std::{UniformRand, Zero};
+use blake2::{Blake2b512, Digest};
 use rand::{thread_rng, RngCore};
 use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -101,6 +102,37 @@ pub fn merge_pairs<G: AffineRepr>(v1: &[G], v2: &[G]) -> (G, G) {
         acc2 += b.mul_bigint(r_repr);
     }
     (acc1.into_affine(), acc2.into_affine())
+}
+
+/// Reduces "does `v` form a geometric progression `[1, x, x^2, x^3, ...]`
+/// for some `x`?" to a single `merge_pairs` combination of consecutive
+/// elements — `v[i+1]` checked against `v[i]` for every `i`, batched.
+pub fn power_pairs<G: AffineRepr>(v: &[G]) -> (G, G) {
+    merge_pairs(&v[0..v.len() - 1], &v[1..])
+}
+
+/// Hashes `(digest, g1_s, g1_s_x, personalization)` to a G2 point, for use
+/// as the base point in a per-secret signature of knowledge (Phase 1 uses
+/// one of these per secret — tau, alpha, beta — distinguished by
+/// `personalization`; Phase 2's `hash_to_g2` is this same idea specialized
+/// to a single secret with no personalization byte needed). Ported from
+/// the reference's `compute_g2_s`.
+pub fn compute_g2_s<E: Pairing>(
+    digest: &[u8],
+    g1_s: E::G1Affine,
+    g1_s_x: E::G1Affine,
+    personalization: u8,
+) -> E::G2 {
+    let mut bytes = Vec::new();
+    bytes.push(personalization);
+    bytes.extend_from_slice(digest);
+    g1_s.serialize_compressed(&mut bytes).expect("infallible");
+    g1_s_x.serialize_compressed(&mut bytes).expect("infallible");
+
+    let mut hasher = Blake2b512::new();
+    hasher.update(&bytes);
+    let out = hasher.finalize();
+    hash_to_g2::<E>(&out)
 }
 
 #[cfg(test)]
