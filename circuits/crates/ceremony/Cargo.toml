@@ -24,7 +24,7 @@ hex = { workspace = true }
 # normal (not dev) dependency because binaries can't link dev-dependencies
 # — same pattern proof-of-observation's own fingerprint/verify-ceremony-params
 # binaries already use.
-proof-of-observation = { path = "../proof-of-observation" }
+proof-of-observation = { path = "../proof-of-observation", features = ["test-support"] }
 ark-bn254 = { workspace = true }
 ark-poly = "0.4"
 

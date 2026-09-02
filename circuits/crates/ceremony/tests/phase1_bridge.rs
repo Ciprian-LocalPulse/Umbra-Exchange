@@ -37,8 +37,8 @@ fn from_phase1_with_trivial_accumulator_produces_a_working_keypair() {
     let domain_size = bridge::required_domain_size(1767, 7);
     let accumulator = Accumulator::<Bn254>::new(domain_size);
 
-    let proving_key =
-        bridge::from_phase1(&accumulator, sample.circuit).expect("bridging a trivial accumulator must succeed");
+    let proving_key = bridge::from_phase1(&accumulator, sample.circuit)
+        .expect("bridging a trivial accumulator must succeed");
 
     let sample2 = sample_observation(
         Fr::from(999u64),
@@ -48,10 +48,14 @@ fn from_phase1_with_trivial_accumulator_produces_a_working_keypair() {
         Fr::from(2u64),
         Fr::from(1u64),
     );
-    let proof = Groth16::<Bn254>::prove(&proving_key, sample2.circuit, &mut rng).expect("proving must succeed");
+    let proof = Groth16::<Bn254>::prove(&proving_key, sample2.circuit, &mut rng)
+        .expect("proving must succeed");
     let valid = Groth16::<Bn254>::verify(&proving_key.vk, &sample2.public_inputs_vec, &proof)
         .expect("verification must not error");
-    assert!(valid, "a trivial (tau=alpha=beta=1) accumulator bridged to a proving key must still work");
+    assert!(
+        valid,
+        "a trivial (tau=alpha=beta=1) accumulator bridged to a proving key must still work"
+    );
 }
 
 #[test]
@@ -70,8 +74,8 @@ fn from_phase1_with_one_real_contribution_produces_a_working_keypair() {
     let (after, pubkey) = phase1::contribute(&before, &mut rng);
     phase1::verify(&before, &after, &pubkey).expect("the single contribution must verify");
 
-    let proving_key =
-        bridge::from_phase1(&after, sample.circuit).expect("bridging a once-contributed accumulator must succeed");
+    let proving_key = bridge::from_phase1(&after, sample.circuit)
+        .expect("bridging a once-contributed accumulator must succeed");
 
     let sample2 = sample_observation(
         Fr::from(999u64),
@@ -81,10 +85,14 @@ fn from_phase1_with_one_real_contribution_produces_a_working_keypair() {
         Fr::from(2u64),
         Fr::from(1u64),
     );
-    let proof = Groth16::<Bn254>::prove(&proving_key, sample2.circuit, &mut rng).expect("proving must succeed");
+    let proof = Groth16::<Bn254>::prove(&proving_key, sample2.circuit, &mut rng)
+        .expect("proving must succeed");
     let valid = Groth16::<Bn254>::verify(&proving_key.vk, &sample2.public_inputs_vec, &proof)
         .expect("verification must not error");
-    assert!(valid, "a once-contributed accumulator bridged to a proving key must still work");
+    assert!(
+        valid,
+        "a once-contributed accumulator bridged to a proving key must still work"
+    );
 }
 
 #[test]
@@ -105,7 +113,10 @@ fn phase1_bridged_into_phase2_produces_a_working_keypair() {
     // (if small — two contributions, in-memory) Phase 1 ceremony at that
     // size.
     let domain_size = bridge::required_domain_size(1767, 7);
-    assert_eq!(domain_size, 2048, "sanity check on the expected domain size for this circuit");
+    assert_eq!(
+        domain_size, 2048,
+        "sanity check on the expected domain size for this circuit"
+    );
 
     let mut accumulator = Accumulator::<Bn254>::new(domain_size);
     let mut phase1_pubkeys = vec![];
@@ -117,13 +128,14 @@ fn phase1_bridged_into_phase2_produces_a_working_keypair() {
         phase1_pubkeys.push(pubkey);
         phase1_states.push(accumulator.clone());
     }
-    phase1::verify_chain(&phase1_states, &phase1_pubkeys).expect("the whole phase 1 chain must verify");
+    phase1::verify_chain(&phase1_states, &phase1_pubkeys)
+        .expect("the whole phase 1 chain must verify");
 
     // Bridge Phase 1's output into circuit-specific Phase 2 starting
     // parameters — the piece whose correctness this whole test exists to
     // check.
-    let proving_key =
-        bridge::from_phase1(&accumulator, sample.circuit).expect("bridging phase 1 output for a real circuit must succeed");
+    let proving_key = bridge::from_phase1(&accumulator, sample.circuit)
+        .expect("bridging phase 1 output for a real circuit must succeed");
 
     let cs_hash = {
         use ark_serialize::CanonicalSerialize;
@@ -147,7 +159,9 @@ fn phase1_bridged_into_phase2_produces_a_working_keypair() {
     // One Phase 2 contribution on top, for good measure — confirms the
     // bridge's output is a valid *starting point* for the delta chain,
     // not just a standalone valid keypair.
-    params.contribute(&mut rng).expect("phase 2 contribution on bridged parameters must succeed");
+    params
+        .contribute(&mut rng)
+        .expect("phase 2 contribution on bridged parameters must succeed");
 
     // The real payoff.
     let sample2 = sample_observation(
