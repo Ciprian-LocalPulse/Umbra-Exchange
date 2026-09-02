@@ -23,7 +23,7 @@ ark-r1cs-std = "0.4"
 ark-crypto-primitives = { version = "0.4", features = ["r1cs", "merkle_tree", "crh"] }
 ark-groth16 = "0.4"
 ark-bn254 = "0.4"
-ark-snark = "0.4"
+ark-snark = "0.6"
 ark-serialize = "0.4"
 light-poseidon = "0.2.0"
 rand = "0.8"
