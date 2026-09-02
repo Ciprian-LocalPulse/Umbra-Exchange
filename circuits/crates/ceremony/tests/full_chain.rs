@@ -44,7 +44,8 @@ fn full_ceremony_chain_produces_a_working_keypair() {
     let mut history = vec![clone_params(&params)];
     for _ in 0..3 {
         let mut next = clone_params(&params);
-        next.contribute(&mut rng).expect("contribution must succeed");
+        next.contribute(&mut rng)
+            .expect("contribution must succeed");
         params
             .verify(&next)
             .expect("a correctly-produced contribution must verify");
@@ -141,7 +142,10 @@ fn contribution_from_wrong_cs_hash_is_rejected() {
 
     params_b.contribute(&mut rng).unwrap();
     let result = params_a.verify(&params_b);
-    assert!(result.is_err(), "a contribution against a different cs_hash must be rejected");
+    assert!(
+        result.is_err(),
+        "a contribution against a different cs_hash must be rejected"
+    );
 }
 
 #[test]
