@@ -214,6 +214,8 @@ mod tests {
         let s = kp1.public_key.s;
         let s_delta = kp1.public_key.s_delta;
         let empty_hash = hash_cs_pubkeys::<Bn254>([0u8; 64], &[], s, s_delta);
+    #[allow(clippy::cloned_ref_to_slice_refs)]
+        #[allow(clippy::cloned_ref_to_slice_refs)]
         let with_prior = hash_cs_pubkeys::<Bn254>([0u8; 64], &[kp1.public_key.clone()], s, s_delta);
         assert_ne!(
             empty_hash, with_prior,
