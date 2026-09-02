@@ -3,62 +3,33 @@
 //! undisclosed indicators (ones the relay only ever saw as an opaque
 //! `indicator_hash`, never as a raw string) simply don't appear here.
 
+use crate::indicator_kind::{classify, IndicatorKind};
 use serde::Serialize;
 use serde_json::{json, Value};
 
 /// Best-effort STIX 2.1 pattern construction from a raw, disclosed
-/// indicator string. Covers the common IOC types explicitly (hashes,
-/// IPv4, IPv6, domains, URLs); anything else gets a clearly-marked
-/// fallback rather than a guessed-and-possibly-wrong structured pattern —
-/// asserting `[domain-name:value = '...']` for something that isn't
-/// actually a domain would be worse than not asserting a type at all.
+/// indicator string, via the shared classification in
+/// `indicator_kind.rs`. Covers the common IOC types explicitly; anything
+/// else gets a clearly-marked fallback rather than a guessed-and-possibly
+/// -wrong structured pattern — asserting `[domain-name:value = '...']`
+/// for something that isn't actually a domain would be worse than not
+/// asserting a type at all.
 pub fn stix_pattern_for(raw_indicator: &str) -> String {
     let s = raw_indicator.trim();
-
-    if is_hex(s, 32) {
-        return format!("[file:hashes.MD5 = '{s}']");
-    }
-    if is_hex(s, 40) {
-        return format!("[file:hashes.'SHA-1' = '{s}']");
-    }
-    if is_hex(s, 64) {
-        return format!("[file:hashes.'SHA-256' = '{s}']");
-    }
-    if s.parse::<std::net::Ipv4Addr>().is_ok() {
-        return format!("[ipv4-addr:value = '{s}']");
-    }
-    if s.parse::<std::net::Ipv6Addr>().is_ok() {
-        return format!("[ipv6-addr:value = '{s}']");
-    }
-    if s.starts_with("http://") || s.starts_with("https://") {
-        let escaped = s.replace('\'', "\\'");
-        return format!("[url:value = '{escaped}']");
-    }
-    if looks_like_domain(s) {
-        let escaped = s.replace('\'', "\\'");
-        return format!("[domain-name:value = '{escaped}']");
-    }
-
-    // Unrecognized shape: don't guess a STIX object type we can't back up.
     let escaped = s.replace('\'', "\\'");
-    format!("[x-umbra:unrecognized-indicator = '{escaped}']")
-}
 
-fn is_hex(s: &str, len: usize) -> bool {
-    s.len() == len && s.chars().all(|c| c.is_ascii_hexdigit())
-}
-
-/// Deliberately simple: no scheme/slash, at least one dot, and every
-/// label is a plausible DNS label (alphanumeric plus hyphen). Good enough
-/// to separate "evil.example" from "not a domain at all"; not a full DNS
-/// grammar and not meant to be one — see module docs on normalization
-/// limitations in `proof_of_observation::indicator`.
-fn looks_like_domain(s: &str) -> bool {
-    if s.contains('/') || s.contains(' ') || !s.contains('.') {
-        return false;
+    match classify(s) {
+        IndicatorKind::Md5 => format!("[file:hashes.MD5 = '{s}']"),
+        IndicatorKind::Sha1 => format!("[file:hashes.'SHA-1' = '{s}']"),
+        IndicatorKind::Sha256 => format!("[file:hashes.'SHA-256' = '{s}']"),
+        IndicatorKind::Ipv4 => format!("[ipv4-addr:value = '{s}']"),
+        IndicatorKind::Ipv6 => format!("[ipv6-addr:value = '{s}']"),
+        IndicatorKind::Url => format!("[url:value = '{escaped}']"),
+        IndicatorKind::Domain => format!("[domain-name:value = '{escaped}']"),
+        // Unrecognized shape: don't guess a STIX object type we can't
+        // back up.
+        IndicatorKind::Unrecognized => format!("[x-umbra:unrecognized-indicator = '{escaped}']"),
     }
-    s.split('.')
-        .all(|label| !label.is_empty() && label.chars().all(|c| c.is_alphanumeric() || c == '-'))
 }
 
 /// One epoch's default validity window, per `docs/PROTOCOL_SPEC.md`
@@ -131,6 +102,9 @@ pub fn normalize_confidence(score: u32, score_for_full_confidence: u32) -> u8 {
     scaled.min(100) as u8
 }
 
+/// Not STIX-specific despite living in this file historically — shared
+/// with `misp.rs` too. Kept here (re-exported) rather than moved, to
+/// avoid an unnecessary extra module for one small struct.
 #[derive(Debug, Clone)]
 pub struct StixIndicatorInput {
     pub raw_indicator: String,

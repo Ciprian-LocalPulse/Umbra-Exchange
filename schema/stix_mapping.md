@@ -18,7 +18,11 @@ Indicators that cross the configured confidence threshold get exported from the 
 
 ## MISP
 
-Same underlying data, exported as a MISP event with one attribute per disclosed indicator, `to_ids` set based on the confidence threshold, and the proof-count/relay-id as MISP object attributes rather than STIX custom properties. **Not yet implemented** — exact object template TBD, open to input from anyone who actually runs a MISP instance day to day, since template conventions vary a lot by community.
+**Implemented** in `relay::misp` (`GET /v1/export/misp?threshold=N&to_ids_confidence_threshold=M`), reusing the same shared indicator-type classification (`relay::indicator_kind`) the STIX export uses, so the two formats can't silently disagree about what a given raw indicator "is."
+
+Same underlying data as STIX export, structured as a MISP event containing one custom MISP Object (`umbra-observation`) per disclosed indicator: the indicator itself (type/category from `indicator_kind`, e.g. `sha256`/"Payload delivery", `domain`/"Network activity"), plus `proof-count` and `relay-id` as sibling attributes within that same Object — MISP's real Object mechanism, not STIX-style custom properties, per this doc's original design note. `to_ids` is set when the indicator's normalized confidence (same `score_for_full_confidence` scale as STIX) crosses `to_ids_confidence_threshold` (default 50).
+
+**Important caveat, stated plainly**: `umbra-observation` is a project-defined custom Object, not one registered in MISP's community object-template repository (github.com/MISP/misp-objects). Building a properly community-reviewed template needs input from people who actually run MISP instances day to day — this doc's original "Not yet implemented" note about needing that input still applies to *template standardization*, even though the export itself now works and produces valid MISP JSON.
 
 ## Explicit non-mapping
 

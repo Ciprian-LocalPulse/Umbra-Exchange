@@ -22,6 +22,8 @@
 //! docs/THREAT_MODEL.md.
 
 pub mod encoding;
+pub mod indicator_kind;
+pub mod misp;
 pub mod state;
 pub mod stix;
 
@@ -36,6 +38,7 @@ use axum::{
 use proof_of_observation::indicator::indicator_hash_from_raw;
 use reputation_accumulator::{accumulate, VerifiedObservation};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::sync::Arc;
 
 use encoding::{fr_from_hex, fr_to_hex, proof_from_hex};
@@ -47,6 +50,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/v1/observations", post(submit_observation))
         .route("/v1/score/:indicator_hash/:epoch", get(get_score))
         .route("/v1/export/stix", get(export_stix))
+        .route("/v1/export/misp", get(export_misp))
         .with_state(state)
 }
 
@@ -312,5 +316,61 @@ async fn export_stix(
         &inputs,
         state.score_for_full_confidence,
         &state.relay_id,
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MispExportQuery {
+    /// Minimum raw score to include, same semantics as
+    /// `StixExportQuery::threshold`.
+    #[serde(default = "default_threshold")]
+    pub threshold: u32,
+    /// Confidence (0-100) an indicator must reach to be marked `to_ids`
+    /// in the exported MISP event — see `misp::to_ids_for_confidence`.
+    #[serde(default = "default_to_ids_confidence_threshold")]
+    pub to_ids_confidence_threshold: u8,
+}
+
+fn default_to_ids_confidence_threshold() -> u8 {
+    50
+}
+
+/// `GET /v1/export/misp?threshold=N&to_ids_confidence_threshold=M` — a
+/// MISP event covering the same disclosed, scored indicators
+/// `/v1/export/stix` would, in MISP's own format instead of STIX's. See
+/// `misp.rs`'s module docs for what this does and doesn't claim about
+/// MISP community object-template conformance.
+async fn export_misp(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<MispExportQuery>,
+) -> Json<Value> {
+    let inner = state.inner.lock().expect("relay state mutex poisoned");
+
+    let inputs: Vec<stix::StixIndicatorInput> = inner
+        .scores
+        .iter()
+        .filter(|(_, &score)| score >= query.threshold)
+        .filter_map(|((indicator_key, epoch), &score)| {
+            let raw_indicator = inner.disclosed_indicators.get(indicator_key)?;
+            let proof_count = inner
+                .proof_counts
+                .get(&(indicator_key.clone(), *epoch))
+                .copied()
+                .unwrap_or(0);
+            Some(stix::StixIndicatorInput {
+                raw_indicator: raw_indicator.clone(),
+                epoch: *epoch,
+                score,
+                proof_count,
+            })
+        })
+        .collect();
+
+    Json(misp::build_misp_event(
+        &inputs,
+        state.score_for_full_confidence,
+        query.to_ids_confidence_threshold,
+        &state.relay_id,
+        "Umbra Exchange export",
     ))
 }

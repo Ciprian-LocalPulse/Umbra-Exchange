@@ -206,6 +206,24 @@ async fn export_stix(app: &axum::Router, threshold: u32) -> Value {
     serde_json::from_slice(&bytes).unwrap()
 }
 
+async fn export_misp(app: &axum::Router, threshold: u32) -> Value {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/v1/export/misp?threshold={threshold}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    serde_json::from_slice(&bytes).unwrap()
+}
+
 #[tokio::test]
 async fn valid_proof_is_accepted_and_scored_at_tier_zero() {
     let fx = setup();
@@ -454,4 +472,38 @@ async fn mismatched_disclosure_rejects_the_whole_submission() {
     )
     .await;
     assert_eq!(score["score"], 0);
+}
+
+#[tokio::test]
+async fn disclosed_indicator_appears_in_misp_export() {
+    let fx = setup();
+    let body = build_request_body_for_indicator(&fx.pk, "misp-evil.example", 20260822, 0, true);
+
+    let (status, resp) = post_observation(&fx.app, &body).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(resp["accepted"], true);
+
+    let event = export_misp(&fx.app, 1).await;
+    let objects = event["Event"]["Object"].as_array().unwrap();
+    assert_eq!(objects.len(), 1);
+    let attrs = objects[0]["Attribute"].as_array().unwrap();
+    assert_eq!(attrs[0]["type"], "domain");
+    assert_eq!(attrs[0]["value"], "misp-evil.example");
+}
+
+#[tokio::test]
+async fn undisclosed_indicator_is_excluded_from_misp_export() {
+    let fx = setup();
+    let body = build_request_body_for_indicator(&fx.pk, "misp-quiet.example", 20260822, 0, false);
+
+    let (status, resp) = post_observation(&fx.app, &body).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(resp["accepted"], true);
+
+    let event = export_misp(&fx.app, 1).await;
+    let objects = event["Event"]["Object"].as_array().unwrap();
+    assert!(
+        objects.is_empty(),
+        "an undisclosed indicator must never appear in MISP export either, same as STIX"
+    );
 }
